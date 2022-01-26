@@ -5,14 +5,46 @@ import (
 	"strings"
 )
 
+type SelectKeyWorld string
+
+const (
+	SELECT SelectKeyWorld = "SELECT"
+	JOIN   SelectKeyWorld = "JOIN"
+	ON     SelectKeyWorld = "ON"
+	FROM   SelectKeyWorld = "FROM"
+	WHERE  SelectKeyWorld = "WHERE"
+	AND    SelectKeyWorld = "AND"
+	GROUP  SelectKeyWorld = "GROUP BY"
+	LIMIT  SelectKeyWorld = "LIMIT"
+	OFFSET SelectKeyWorld = "OFFSET"
+)
+
 type sqlArg struct {
 	condition string
 	args      []interface{}
 }
 
+type JoinType int
+
+const (
+	INNERJOIN JoinType = iota
+	LEFTJOIN
+	RIGHTJOIN
+	FULLJOIN
+)
+
+var joinTypeString = []string{"INNER JOIN", "LEFT JOIN", "RIGHT JOIN"}
+
+type join struct {
+	Type  JoinType
+	Table string
+	On    string
+}
+
 type SqlBuild struct {
 	selects   []string
 	from      string
+	join      []*join
 	wheres    []*sqlArg
 	groups    []string
 	orders    []string
@@ -28,6 +60,11 @@ func (s *SqlBuild) Select(sql string) *SqlBuild {
 
 func (s *SqlBuild) From(from string) *SqlBuild {
 	s.from = from
+	return s
+}
+
+func (s *SqlBuild) Join(jt JoinType, table, on string) *SqlBuild {
+	s.join = append(s.join, &join{Type: jt, Table: table, On: on})
 	return s
 }
 
@@ -61,9 +98,8 @@ func (s *SqlBuild) Sql() (string, interface{}) {
 	sb := strings.Builder{}
 	var args []interface{}
 
-	// 1 select
-
-	sb.WriteString("select")
+	// # select
+	sb.WriteString(string(SELECT))
 	sb.WriteByte(' ')
 	if len(s.selects) > 0 {
 		for _, selectField := range s.selects {
@@ -75,15 +111,29 @@ func (s *SqlBuild) Sql() (string, interface{}) {
 		sb.WriteByte(' ')
 	}
 
-	// 2 from
-	sb.WriteString("from")
+	// # from
+	sb.WriteString(string(FROM))
 	sb.WriteByte(' ')
 	sb.WriteString(s.from)
 	sb.WriteByte(' ')
 
-	// 3 wheres
+	// # join
+	if len(s.join) > 0 {
+		for index := range s.join {
+			sb.WriteString(joinTypeString[s.join[index].Type])
+			sb.WriteByte(' ')
+			sb.WriteString(s.join[index].Table)
+			sb.WriteByte(' ')
+			sb.WriteString(string(ON))
+			sb.WriteByte(' ')
+			sb.WriteString(s.join[index].On)
+			sb.WriteByte(' ')
+		}
+	}
+
+	// # wheres
 	if len(s.wheres) > 0 {
-		sb.WriteString("where")
+		sb.WriteString(string(WHERE))
 		sb.WriteByte(' ')
 
 		var count uint
@@ -91,7 +141,7 @@ func (s *SqlBuild) Sql() (string, interface{}) {
 		for _, temp := range s.wheres {
 
 			if count != 0 {
-				allWhere.WriteString("and")
+				allWhere.WriteString(string(AND))
 				allWhere.WriteByte(' ')
 			}
 
@@ -104,9 +154,9 @@ func (s *SqlBuild) Sql() (string, interface{}) {
 		sb.WriteByte(' ')
 	}
 
-	// 4 group by
+	// # group by
 	if len(s.groups) > 0 {
-		sb.WriteString("group by")
+		sb.WriteString(string(GROUP))
 		sb.WriteByte(' ')
 		for _, temp := range s.groups {
 			sb.WriteString(temp)
@@ -114,17 +164,17 @@ func (s *SqlBuild) Sql() (string, interface{}) {
 		}
 	}
 
-	// 5 limit
+	// # limit
 	if s.limit > 0 {
-		sb.WriteString("limit")
+		sb.WriteString(string(LIMIT))
 		sb.WriteByte(' ')
 		sb.WriteString(fmt.Sprintf("%d", s.limit))
 		sb.WriteByte(' ')
 	}
 
-	// 6 offset
+	// # offset
 	if s.offset > 0 {
-		sb.WriteString("offset")
+		sb.WriteString(string(OFFSET))
 		sb.WriteByte(' ')
 		sb.WriteString(fmt.Sprintf("%d", s.offset))
 		sb.WriteByte(' ')
